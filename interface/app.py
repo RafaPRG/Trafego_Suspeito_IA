@@ -81,6 +81,23 @@ st.markdown(
         box-shadow: 0 0 34px rgba(255, 59, 59, 0.76);
     }
 
+    [data-testid="stSidebar"] div.stButton > button[kind="tertiary"] {
+        background: rgba(255, 184, 77, 0.14);
+        border: 1px solid rgba(255, 184, 77, 0.72);
+        color: #ffcf7a;
+        font-weight: 850;
+        min-height: 2.8rem;
+        box-shadow: 0 0 18px rgba(255, 184, 77, 0.24);
+    }
+
+    [data-testid="stSidebar"] div.stButton > button[kind="tertiary"]:hover {
+        background: #ffb84d;
+        border-color: #ffe0a3;
+        color: #090604;
+        box-shadow: 0 0 26px rgba(255, 184, 77, 0.54);
+        transform: translateY(-2px);
+    }
+
     .main-title {
         color: #e8fff3;
         font-size: 2.35rem;
@@ -458,7 +475,6 @@ def process_next_packet(stream_df, feature_columns, model, threshold):
         st.session_state.last_alert_type = "attack"
 
     st.session_state.recent_health_status.append(health_status)
-    st.session_state.recent_health_status = st.session_state.recent_health_status[-50:]
 
     log_entry = {
         "pacote": st.session_state.packets_analyzed,
@@ -574,7 +590,7 @@ with st.sidebar:
     )
     st.metric("Pacotes na base", len(stream_df))
 
-    if st.button("Resetar sessao", type="tertiary"):
+    if st.button("Limpar monitoramento", type="tertiary", use_container_width=True):
         st.cache_data.clear()
         reset_session()
         st.rerun()
@@ -593,9 +609,12 @@ metric_col_3.metric("Ataques Bloqueados", st.session_state.attack_count)
 left_col, right_col = st.columns([1.15, 1])
 
 with left_col:
-    st.markdown('<div class="panel-title">Saúde da Rede (1 = Seguro | 0 = Sob Ataque)</div>', unsafe_allow_html=True)
-    chart_data = pd.DataFrame({"saude_rede": st.session_state.recent_health_status})
-    st.line_chart(chart_data)
+    st.markdown('<div class="panel-title">Saúde da Rede - Histórico da Sessão (1 = Seguro | 0 = Sob Ataque)</div>', unsafe_allow_html=True)
+    chart_data = pd.DataFrame({
+        "pacote": range(1, len(st.session_state.recent_health_status) + 1),
+        "saude_rede": st.session_state.recent_health_status,
+    })
+    st.line_chart(chart_data, x="pacote", y="saude_rede")
 
     if st.session_state.last_alert_type == "attack":
         st.markdown(
