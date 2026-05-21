@@ -435,11 +435,7 @@ def reset_session():
 
 def process_next_packet(stream_df, feature_columns, model, threshold):
     """Processa um pacote por execucao para permitir Start/Stop responsivo."""
-    if st.session_state.stream_index >= len(stream_df):
-        return False
-
-    row = stream_df.iloc[st.session_state.stream_index]
-    st.session_state.stream_index += 1
+    row = stream_df.sample(n=1).iloc[0]
     st.session_state.packets_analyzed += 1
 
     probability = forward_pass(row[feature_columns].to_numpy(), model)
@@ -632,5 +628,3 @@ if monitoring_active:
     if processed:
         time.sleep(0.3)
         st.rerun()
-    else:
-        st.sidebar.success("Fim da base de teste. Entre em Modo Analise.")
