@@ -7,12 +7,13 @@ import pandas as pd
 # Semente fixa para garantir que a amostragem aleatoria seja reprodutivel.
 RANDOM_STATE = 42
 
-# Caminhos do projeto. O script fica em Script/ e o banco original em Database/.
+# Caminhos do projeto. O script fica em Script/ e as bases finais ficam em Database/.
 BASE_DIR = Path(__file__).resolve().parent.parent
 INPUT_PATH = BASE_DIR / 'Database' / 'trafego_rede.csv'
-OUTPUT_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / 'Database'
 TRAIN_OUTPUT_PATH = OUTPUT_DIR / 'base_treino.csv'
 TEST_OUTPUT_PATH = OUTPUT_DIR / 'base_teste.csv'
+PRESENTATION_OUTPUT_PATH = OUTPUT_DIR / 'base_apresentacao.csv'
 
 # Variaveis independentes escolhidas para reduzir a dimensionalidade do problema.
 FEATURE_COLUMNS = [
@@ -82,19 +83,52 @@ train_df = pd.concat([normal_train, attack_train], ignore_index=True)
 train_df = train_df.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
 test_df = test_df.reset_index(drop=True)
 
-# 5. Aplica Min-Max Scaling nas variaveis independentes.
+# 5. Cria uma base de apresentacao isolada das bases de treino e teste.
+# Primeiro removemos do conjunto restante as linhas que foram usadas no treino.
+# Assim, a base de apresentacao vem somente das sobras reais do dataset.
+train_indices = normal_train.index.union(attack_train.index)
+unused_df = remaining_df.drop(index=train_indices)
+
+# A base de apresentacao simula um cenario mais realista para demonstracao:
+# 90% de trafego normal e 10% de ataques, totalizando 10.000 registros.
+presentation_normal = unused_df[unused_df['target'] == 0].sample(
+    n=9000,
+    random_state=RANDOM_STATE,
+)
+presentation_attack = unused_df[unused_df['target'] == 1].sample(
+    n=1000,
+    random_state=RANDOM_STATE,
+)
+
+presentation_df = pd.concat(
+    [presentation_normal, presentation_attack],
+    ignore_index=True,
+)
+presentation_df = presentation_df.sample(
+    frac=1,
+    random_state=RANDOM_STATE,
+).reset_index(drop=True)
+
+# 6. Aplica Min-Max Scaling nas variaveis independentes.
 # Os minimos e maximos sao calculados somente no treino para evitar data leakage.
-train_df, test_df = min_max_scale(train_df, test_df, FEATURE_COLUMNS)
+raw_train_df = train_df.copy()
+train_df, test_df = min_max_scale(raw_train_df, test_df, FEATURE_COLUMNS)
+_, presentation_df = min_max_scale(raw_train_df, presentation_df, FEATURE_COLUMNS)
 
 # Salva as bases finais prontas para a MLP implementada do zero.
 train_df.to_csv(TRAIN_OUTPUT_PATH, index=False)
 test_df.to_csv(TEST_OUTPUT_PATH, index=False)
+presentation_df.to_csv(PRESENTATION_OUTPUT_PATH, index=False)
 
 print(f'Base de treino salva em: {TRAIN_OUTPUT_PATH}')
 print(f'Base de teste salva em: {TEST_OUTPUT_PATH}')
+print(f'Base de apresentacao salva em: {PRESENTATION_OUTPUT_PATH}')
 print(f'Tamanho da base de treino: {len(train_df)} linhas')
 print(f'Tamanho da base de teste: {len(test_df)} linhas')
+print(f'Tamanho da base de apresentacao: {len(presentation_df)} linhas')
 print('Distribuicao da base de treino:')
 print(train_df['target'].value_counts().sort_index())
 print('Distribuicao da base de teste:')
 print(test_df['target'].value_counts(normalize=True).sort_index())
+print('Distribuicao da base de apresentacao:')
+print(presentation_df['target'].value_counts().sort_index())

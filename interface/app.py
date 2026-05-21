@@ -278,11 +278,11 @@ MODEL_PATHS = [
     "mlp_core/pesos_treinados.json",
 ]
 STREAM_PATHS = [
-    "../Database/base_teste.csv",
-    "../database/base_teste.csv",
-    "../Script/base_teste.csv",
-    "Database/base_teste.csv",
-    "database/base_teste.csv",
+    "../Database/base_apresentacao.csv",
+    "../database/base_apresentacao.csv",
+    "../Script/base_apresentacao.csv",
+    "Database/base_apresentacao.csv",
+    "database/base_apresentacao.csv",
 ]
 
 DEFAULT_FEATURE_COLUMNS = [
@@ -540,7 +540,7 @@ threshold = model["threshold"]
 
 missing_columns = set(feature_columns) - set(stream_df.columns)
 if missing_columns:
-    st.error(f"Colunas ausentes em base_teste.csv: {sorted(missing_columns)}")
+    st.error(f"Colunas ausentes em base_apresentacao.csv: {sorted(missing_columns)}")
     st.stop()
 
 
@@ -565,10 +565,17 @@ with st.sidebar:
     monitoring_active = st.session_state.monitoring_active
 
     st.caption("Use o botao para iniciar, pausar e retomar o fluxo simulado.")
-    st.metric("Threshold MLP", f"{threshold:.2f}")
+    threshold = st.slider(
+        "Limiar de alerta da MLP",
+        min_value=0.50,
+        max_value=0.95,
+        value=0.70,
+        step=0.05,
+    )
     st.metric("Pacotes na base", len(stream_df))
 
     if st.button("Resetar sessao", type="tertiary"):
+        st.cache_data.clear()
         reset_session()
         st.rerun()
 
