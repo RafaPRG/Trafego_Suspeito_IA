@@ -20,6 +20,7 @@ EPOCHS = 1000
 LEARNING_RATE = 0.5
 MOMENTUM = 0.9
 THRESHOLD = 0.5
+TRAININGS_PER_TOPOLOGY = 3
 
 FEATURE_COLUMNS = [
     "logged_in",
@@ -234,11 +235,38 @@ def calculate_metrics(y_true, y_pred):
 
 
 def plot_mse_histories(results):
-    """Gera o grafico comparativo da evolucao do MSE nas quatro topologias."""
+    """Gera o grafico comparativo usando o melhor treinamento de cada topologia."""
     plt.figure(figsize=(12, 7))
 
+    best_by_topology = {}
     for result in results:
-        label = f"{result['hidden_neurons']} neuronios ocultos"
+        hidden_neurons = result["hidden_neurons"]
+        current_best = best_by_topology.get(hidden_neurons)
+
+        if current_best is None:
+            best_by_topology[hidden_neurons] = result
+            continue
+
+        current_key = (
+            current_best["metrics"]["false_negative_rate"],
+            -current_best["metrics"]["accuracy"],
+            current_best["mse_history"][-1],
+        )
+        candidate_key = (
+            result["metrics"]["false_negative_rate"],
+            -result["metrics"]["accuracy"],
+            result["mse_history"][-1],
+        )
+
+        if candidate_key < current_key:
+            best_by_topology[hidden_neurons] = result
+
+    for hidden_neurons in TOPOLOGIES:
+        result = best_by_topology[hidden_neurons]
+        label = (
+            f"{hidden_neurons} neuronios ocultos "
+            f"(melhor T{result['training_number']})"
+        )
         plt.plot(result["mse_history"], label=label, linewidth=1.8)
 
     plt.title("Comparativo de Topologias MLP - Evolucao do MSE")
@@ -258,6 +286,8 @@ def save_best_model(best_result):
             "input_neurons": len(FEATURE_COLUMNS),
             "hidden_neurons": best_result["hidden_neurons"],
             "output_neurons": 1,
+            "training_number": best_result["training_number"],
+            "initial_seed": best_result["initial_seed"],
         },
         "training_config": {
             "epochs": EPOCHS,
@@ -265,6 +295,7 @@ def save_best_model(best_result):
             "momentum": MOMENTUM,
             "threshold": THRESHOLD,
             "random_state": RANDOM_STATE,
+            "trainings_per_topology": TRAININGS_PER_TOPOLOGY,
         },
         "test_metrics": best_result["metrics"],
         "model": best_result["model"].to_dict(),
@@ -292,56 +323,64 @@ def main():
     print(f"Base de treino: {train_path}")
     print(f"Base de teste: {test_path}")
     print(f"Epocas: {EPOCHS} | Learning rate: {LEARNING_RATE} | Momentum: {MOMENTUM}")
+    print(f"Treinamentos por topologia: {TRAININGS_PER_TOPOLOGY}")
     print("-" * 72)
 
     for hidden_neurons in TOPOLOGIES:
-        print(f"Treinando rede com {hidden_neurons} neuronios na camada oculta...")
+        print(f"Topologia com {hidden_neurons} neuronios na camada oculta")
 
-        mlp = MLP(
-            input_size=len(FEATURE_COLUMNS),
-            hidden_size=hidden_neurons,
-            output_size=1,
-            random_state=RANDOM_STATE + hidden_neurons,
-        )
+        for training_number in range(1, TRAININGS_PER_TOPOLOGY + 1):
+            initial_seed = RANDOM_STATE + (hidden_neurons * 100) + training_number
+            print(f"  Treinamento T{training_number} | seed inicial: {initial_seed}")
 
-        mse_history = mlp.train(
-            x=x_train,
-            y=y_train,
-            epochs=EPOCHS,
-            learning_rate=LEARNING_RATE,
-            momentum=MOMENTUM,
-        )
+            mlp = MLP(
+                input_size=len(FEATURE_COLUMNS),
+                hidden_size=hidden_neurons,
+                output_size=1,
+                random_state=initial_seed,
+            )
 
-        y_pred = mlp.predict(x_test, threshold=THRESHOLD)
-        metrics = calculate_metrics(y_test, y_pred)
+            mse_history = mlp.train(
+                x=x_train,
+                y=y_train,
+                epochs=EPOCHS,
+                learning_rate=LEARNING_RATE,
+                momentum=MOMENTUM,
+            )
 
-        results.append({
-            "hidden_neurons": hidden_neurons,
-            "model": mlp,
-            "mse_history": mse_history,
-            "metrics": metrics,
-        })
+            y_pred = mlp.predict(x_test, threshold=THRESHOLD)
+            metrics = calculate_metrics(y_test, y_pred)
 
-        print(f"Relatorio - {hidden_neurons} neuronios ocultos")
-        print(f"  MSE final: {mse_history[-1]:.6f}")
-        print(f"  Acuracia: {metrics['accuracy']:.4f}")
-        print(f"  Taxa de Falsos Positivos: {metrics['false_positive_rate']:.4f}")
-        print(f"  Taxa de Falsos Negativos: {metrics['false_negative_rate']:.4f}")
-        print(
-            "  Matriz: "
-            f"TP={metrics['true_positive']} | TN={metrics['true_negative']} | "
-            f"FP={metrics['false_positive']} | FN={metrics['false_negative']}"
-        )
+            results.append({
+                "hidden_neurons": hidden_neurons,
+                "training_number": training_number,
+                "initial_seed": initial_seed,
+                "model": mlp,
+                "mse_history": mse_history,
+                "metrics": metrics,
+            })
+
+            print(f"    MSE final: {mse_history[-1]:.6f}")
+            print(f"    Acuracia: {metrics['accuracy']:.4f}")
+            print(f"    Taxa de Falsos Positivos: {metrics['false_positive_rate']:.4f}")
+            print(f"    Taxa de Falsos Negativos: {metrics['false_negative_rate']:.4f}")
+            print(
+                "    Matriz: "
+                f"TP={metrics['true_positive']} | TN={metrics['true_negative']} | "
+                f"FP={metrics['false_positive']} | FN={metrics['false_negative']}"
+            )
         print("-" * 72)
 
     plot_mse_histories(results)
 
-    # Criterio pedido: menor taxa de falsos negativos e, em seguida, maior acuracia.
+    # Criterio de escolha: menor taxa de falsos negativos, maior acuracia
+    # e, em caso de novo empate, menor MSE final.
     best_result = sorted(
         results,
         key=lambda item: (
             item["metrics"]["false_negative_rate"],
             -item["metrics"]["accuracy"],
+            item["mse_history"][-1],
         ),
     )[0]
 
@@ -349,6 +388,8 @@ def main():
 
     print("Modelo vencedor")
     print(f"  Camada oculta: {best_result['hidden_neurons']} neuronios")
+    print(f"  Treinamento: T{best_result['training_number']}")
+    print(f"  Seed inicial: {best_result['initial_seed']}")
     print(f"  Acuracia: {best_result['metrics']['accuracy']:.4f}")
     print(
         "  Taxa de Falsos Negativos: "
