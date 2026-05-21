@@ -1,0 +1,29 @@
+# Arquivos gerados pelo pre-processamento
+Database/base_treino.csv
+Database/base_teste.csv
+Database/base_apresentacao.csv
+Script/base_treino.csv
+Script/base_teste.csv
+Script/base_apresentacao.csv
+
+# Saidas geradas por treinamento e analises
+mlp_core/pesos_treinados.json
+mlp_core/comparativo_topologias.png
+Script/*.png
+
+# Caches e arquivos temporarios Python/Streamlit
+__pycache__/
+*.py[cod]
+*$py.class
+.streamlit/
+
+# Ambientes virtuais locais
+.venv/
+venv/
+env/
+
+# Arquivos locais de IDE e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
