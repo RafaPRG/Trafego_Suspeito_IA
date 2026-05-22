@@ -433,6 +433,12 @@ def initialize_session_state():
         "packets_analyzed": 0,
         "normal_count": 0,
         "attack_count": 0,
+        "correct_predictions": 0,
+        "wrong_predictions": 0,
+        "true_positive": 0,
+        "true_negative": 0,
+        "false_positive": 0,
+        "false_negative": 0,
         "recent_health_status": [],
         "logs": [],
         "history": [],
@@ -452,6 +458,12 @@ def reset_session():
     st.session_state.packets_analyzed = 0
     st.session_state.normal_count = 0
     st.session_state.attack_count = 0
+    st.session_state.correct_predictions = 0
+    st.session_state.wrong_predictions = 0
+    st.session_state.true_positive = 0
+    st.session_state.true_negative = 0
+    st.session_state.false_positive = 0
+    st.session_state.false_negative = 0
     st.session_state.recent_health_status = []
     st.session_state.logs = []
     st.session_state.history = []
@@ -467,8 +479,9 @@ def process_next_packet(stream_df, feature_columns, model, threshold):
 
     probability = forward_pass(row[feature_columns].to_numpy(), model)
     current_time = time.strftime("%H:%M:%S")
+    prediction = int(probability >= threshold)
 
-    if probability < threshold:
+    if prediction == 0:
         event_type = "normal"
         health_status = 1
         st.session_state.normal_count += 1
@@ -484,6 +497,28 @@ def process_next_packet(stream_df, feature_columns, model, threshold):
         st.session_state.last_alert = attack_message
         st.session_state.last_alert_type = "attack"
 
+    target_real = None
+    evaluation_result = "Sem rotulo"
+
+    if "target" in row.index:
+        target_real = int(row["target"])
+
+        if prediction == target_real:
+            st.session_state.correct_predictions += 1
+            evaluation_result = "Acerto"
+        else:
+            st.session_state.wrong_predictions += 1
+            evaluation_result = "Erro"
+
+        if prediction == 1 and target_real == 1:
+            st.session_state.true_positive += 1
+        elif prediction == 0 and target_real == 0:
+            st.session_state.true_negative += 1
+        elif prediction == 1 and target_real == 0:
+            st.session_state.false_positive += 1
+        elif prediction == 0 and target_real == 1:
+            st.session_state.false_negative += 1
+
     st.session_state.recent_health_status.append(health_status)
 
     log_entry = {
@@ -492,6 +527,9 @@ def process_next_packet(stream_df, feature_columns, model, threshold):
         "tipo": event_type,
         "mensagem": message,
         "probabilidade_ataque": probability,
+        "predicao_ia": prediction,
+        "target_real": target_real,
+        "resultado_ia": evaluation_result,
         "count": float(row["count"]),
         "dst_host_same_src_port_rate": float(row["dst_host_same_src_port_rate"]),
     }
@@ -610,6 +648,22 @@ metric_col_1, metric_col_2, metric_col_3 = st.columns(3)
 metric_col_1.metric("Pacotes Analisados", st.session_state.packets_analyzed)
 metric_col_2.metric("Trafego Normal", st.session_state.normal_count)
 metric_col_3.metric("Ataques Bloqueados", st.session_state.attack_count)
+
+evaluated_packets = (
+    st.session_state.correct_predictions + st.session_state.wrong_predictions
+)
+session_accuracy = (
+    st.session_state.correct_predictions / evaluated_packets
+    if evaluated_packets > 0
+    else 0
+)
+
+eval_col_1, eval_col_2, eval_col_3, eval_col_4, eval_col_5 = st.columns(5)
+eval_col_1.metric("Acuracia da IA", f"{session_accuracy:.1%}")
+eval_col_2.metric("Acertos", st.session_state.correct_predictions)
+eval_col_3.metric("Erros", st.session_state.wrong_predictions)
+eval_col_4.metric("Falsos Positivos", st.session_state.false_positive)
+eval_col_5.metric("Falsos Negativos", st.session_state.false_negative)
 
 left_col, right_col = st.columns([1.15, 1])
 
