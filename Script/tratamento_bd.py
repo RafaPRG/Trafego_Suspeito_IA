@@ -62,13 +62,22 @@ df = df[FEATURE_COLUMNS + ['label']].copy()
 df['target'] = np.where(df['label'] == 'normal.', 0, 1)
 df = df.drop(columns=['label'])
 
-# 3. Separa uma base de teste realista antes de qualquer balanceamento artificial.
+original_size = len(df)
+df = df.drop_duplicates(subset=FEATURE_COLUMNS + ['target']).reset_index(drop=True)
+removed_duplicates = original_size - len(df)
+
+# 3. Remove padroes repetidos antes da separacao das bases.
+# Isso evita que treino e teste tenham linhas equivalentes, deixando a avaliacao
+# menos otimista e mais fiel a dados ainda nao vistos pela rede.
+print(f'Duplicatas removidas antes da separacao: {removed_duplicates}')
+
+# 4. Separa uma base de teste realista antes de qualquer balanceamento artificial.
 # A amostragem aleatoria simples preserva, em expectativa, a proporcao original
 # entre trafego normal e ataques.
 test_df = df.sample(n=5000, random_state=RANDOM_STATE)
 remaining_df = df.drop(index=test_df.index)
 
-# 4. Cria uma base de treino balanceada por undersampling:
+# 5. Cria uma base de treino balanceada por undersampling:
 # 5.000 exemplos normais e 5.000 exemplos de ataques mistos.
 normal_train = remaining_df[remaining_df['target'] == 0].sample(
     n=5000,
@@ -83,7 +92,7 @@ train_df = pd.concat([normal_train, attack_train], ignore_index=True)
 train_df = train_df.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
 test_df = test_df.reset_index(drop=True)
 
-# 5. Cria uma base de apresentacao isolada das bases de treino e teste.
+# 6. Cria uma base de apresentacao isolada das bases de treino e teste.
 # Primeiro removemos do conjunto restante as linhas que foram usadas no treino.
 # Assim, a base de apresentacao vem somente das sobras reais do dataset.
 train_indices = normal_train.index.union(attack_train.index)
@@ -109,7 +118,7 @@ presentation_df = presentation_df.sample(
     random_state=RANDOM_STATE,
 ).reset_index(drop=True)
 
-# 6. Aplica Min-Max Scaling nas variaveis independentes.
+# 7. Aplica Min-Max Scaling nas variaveis independentes.
 # Os minimos e maximos sao calculados somente no treino para evitar data leakage.
 raw_train_df = train_df.copy()
 train_df, test_df = min_max_scale(raw_train_df, test_df, FEATURE_COLUMNS)

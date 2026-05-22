@@ -342,10 +342,26 @@ def load_model():
     return {
         "feature_columns": model.get("feature_columns", DEFAULT_FEATURE_COLUMNS),
         "threshold": float(config.get("threshold", 0.5)),
-        "weights_input_hidden": np.array(model["weights_input_hidden"], dtype=float),
-        "bias_hidden": np.array(model["bias_hidden"], dtype=float),
-        "weights_hidden_output": np.array(model["weights_hidden_output"], dtype=float),
-        "bias_output": np.array(model["bias_output"], dtype=float),
+        "weights": [
+            np.array(weights, dtype=float)
+            for weights in model.get(
+                "weights",
+                [
+                    model["weights_input_hidden"],
+                    model["weights_hidden_output"],
+                ],
+            )
+        ],
+        "biases": [
+            np.array(biases, dtype=float)
+            for biases in model.get(
+                "biases",
+                [
+                    model["bias_hidden"],
+                    model["bias_output"],
+                ],
+            )
+        ],
     }
 
 
@@ -364,16 +380,10 @@ def sigmoid(values):
 
 def forward_pass(row_values, model):
     """Executa apenas o Forward Pass da MLP, sem treinamento ou backpropagation."""
-    x = np.array(row_values, dtype=float).reshape(1, -1)
+    final_output = np.array(row_values, dtype=float).reshape(1, -1)
 
-    hidden_input = np.dot(x, model["weights_input_hidden"]) + model["bias_hidden"]
-    hidden_output = sigmoid(hidden_input)
-
-    final_input = (
-        np.dot(hidden_output, model["weights_hidden_output"])
-        + model["bias_output"]
-    )
-    final_output = sigmoid(final_input)
+    for weights, biases in zip(model["weights"], model["biases"]):
+        final_output = sigmoid(np.dot(final_output, weights) + biases)
 
     return float(final_output[0][0])
 
@@ -581,17 +591,12 @@ with st.sidebar:
     monitoring_active = st.session_state.monitoring_active
 
     st.caption("Use o botao para iniciar, pausar e retomar o fluxo simulado.")
-    threshold = st.slider(
-        "Limiar de alerta da MLP",
-        min_value=0.50,
-        max_value=0.95,
-        value=0.70,
-        step=0.05,
-    )
+    st.metric("Limiar calibrado", f"{threshold:.2f}")
     st.metric("Pacotes na base", len(stream_df))
 
     if st.button("Limpar monitoramento", type="tertiary", use_container_width=True):
         st.cache_data.clear()
+        st.cache_resource.clear()
         reset_session()
         st.rerun()
 
